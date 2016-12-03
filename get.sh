@@ -16,16 +16,18 @@ main() {
     need_cmd curl
     need_cmd mktemp
     need_cmd rm
+    need_cmd select
     need_cmd sudo
     need_cmd tar
 
     if [ $# -eq 0 ]; then
-        echo "Usage: get.sh [-k] (agent | api | auth | cli)"
+        echo "Usage: get.sh [-k -y] (agent | api | auth | cli)"
         exit 1
     fi
 
     local _app=""
     local _keep_dir=no
+    local _no_prompt=no
 
     for arg in "$@"; do
         case "$arg" in
@@ -35,6 +37,11 @@ main() {
 
             -k)
                 _keep_dir=yes
+                _no_prompt=yes
+                ;;
+
+            -y)
+                _no_prompt=yes
                 ;;
 
             *)
@@ -66,7 +73,7 @@ main() {
     fi
     cd "$_dir"
     ensure tar -xf "$_file" --strip 1
-    sudo ./installer.sh install
+    do_install "$_app" "$_no_prompt"
     local _retval=$?
     if [ $_keep_dir = "no" ]; then
         echo "done"
@@ -79,6 +86,32 @@ main() {
     fi
 
     return "$_retval"
+}
+
+do_install() {
+    local _target=install
+    if [ $1 == "api" ] && [ $2 == "no" ]; then
+        echo "Which language components do you want to install?"
+        echo "Note that C support is an auto-dependency for all other languages."
+        select lang in "C" "PHP"; do
+            case $lang in
+                C)
+                    _target="install-c"
+                    break
+                    ;;
+                PHP)
+                    _target="install-php"
+                    break
+                    ;;
+
+                *)
+                    echo "Please enter the option number..."
+                    ;;
+            esac
+        done
+    fi
+
+    sudo -E PATH=$PATH ./installer.sh $_target
 }
 
 get_os() {
