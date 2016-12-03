@@ -99,6 +99,7 @@ do_install() {
                     _target="install-c"
                     break
                     ;;
+
                 PHP)
                     _target="install-php"
                     break
