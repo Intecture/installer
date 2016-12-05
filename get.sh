@@ -21,11 +21,12 @@ main() {
     need_cmd tar
 
     if [ $# -eq 0 ]; then
-        echo "Usage: get.sh [-k -y] (agent | api | auth | cli)"
+        echo "Usage: get.sh [-d -k -y] (agent | api | auth | cli)"
         exit 1
     fi
 
-    local _app=""
+    local _tmpdir=
+    local _app=
     local _keep_dir=no
     local _no_prompt=no
 
@@ -33,6 +34,10 @@ main() {
         case "$arg" in
             agent | api | auth | cli)
                 _app="$arg"
+                ;;
+
+            -d)
+                _tmpdir="$arg"
                 ;;
 
             -k)
@@ -50,6 +55,11 @@ main() {
         esac
     done
 
+    if [ -z $_tmpdir ]; then
+        _tmpdir="$(mktemp -d 2>/dev/null || ensure mktemp -d -t intecture)"
+    fi
+
+    assert_nz "$_tmpdir" "temp dir"
     assert_nz "$_app" "app"
 
     get_os
@@ -57,13 +67,14 @@ main() {
     assert_nz "$_os" "os"
 
     local _url="$ASSET_URL/$_app/$_os/latest"
-    local _dir="$(mktemp -d 2>/dev/null || ensure mktemp -d -t intecture)"
-    local _file="$_dir/pkg.tar.bz2"
+    local _file="$_tmpdir/$_app.tar.bz2"
 
     if [ $_keep_dir = "no" ]; then
         echo -n "Downloading $_app package..."
     fi
-    ensure curl -sSfL "$_url" -o "$_file"
+    if [ ! -f "$_file" ]; then
+        ensure curl -sSfL "$_url" -o "$_file"
+    fi
     if [ $_keep_dir = "no" ]; then
         echo "ok"
     fi
@@ -71,8 +82,8 @@ main() {
     if [ $_keep_dir = "no" ]; then
         echo -n "Installing..."
     fi
-    cd "$_dir"
-    ensure tar -xf "$_file" --strip 1
+    cd "$_tmpdir"
+    ensure tar -C "$_tmpdir/$_app" -xf "$_file" --strip 1
     do_install "$_app" "$_no_prompt"
     local _retval=$?
     if [ $_keep_dir = "no" ]; then
@@ -80,9 +91,9 @@ main() {
     fi
 
     if [ $_keep_dir = "no" ]; then
-        rm -rf "$_dir"
+        rm -rf "$_tmpdir"
     else
-        echo "$_dir"
+        echo "$_tmpdir"
     fi
 
     return "$_retval"
@@ -112,7 +123,7 @@ do_install() {
         done
     fi
 
-    sudo -E PATH=$PATH ./installer.sh $_target
+    sudo -E PATH=$PATH "$_app/installer.sh" $_target
 }
 
 get_os() {
