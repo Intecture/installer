@@ -12,6 +12,8 @@ set -u
 
 ASSET_URL="https://static.intecture.io"
 
+tmpdir=
+
 main() {
     need_cmd curl
     need_cmd mktemp
@@ -21,13 +23,12 @@ main() {
     need_cmd tar
 
     if [ $# -eq 0 ]; then
-        echo "Usage: get.sh [-d -k -y] (agent | api | auth | cli)"
+        echo "Usage: get.sh [-y] [-d <path>] (agent | api | auth | cli)"
         exit 1
     fi
 
-    local _tmpdir=
     local _app=
-    local _keep_dir=no
+    local _cleanup=yes
     local _no_prompt=no
 
     for arg in "$@"; do
@@ -37,12 +38,8 @@ main() {
                 ;;
 
             -d)
-                _tmpdir="$arg"
-                ;;
-
-            -k)
-                _keep_dir=yes
-                _no_prompt=yes
+                tmpdir=yes
+                _cleanup=no
                 ;;
 
             -y)
@@ -50,16 +47,20 @@ main() {
                 ;;
 
             *)
-                err "Unknown argument $arg"
+                if [ $tmpdir = "yes" ]; then
+                    tmpdir="$arg"
+                else
+                    err "Unknown argument $arg"
+                fi
                 ;;
         esac
     done
 
-    if [ -z $_tmpdir ]; then
-        _tmpdir="$(mktemp -d 2>/dev/null || ensure mktemp -d -t intecture)"
+    if [ -z $tmpdir ] || [ $tmpdir = "yes" ]; then
+        tmpdir="$(mktemp -d 2>/dev/null || ensure mktemp -d -t intecture)"
     fi
 
-    assert_nz "$_tmpdir" "temp dir"
+    assert_nz "$tmpdir" "temp dir"
     assert_nz "$_app" "app"
 
     get_os
@@ -67,41 +68,33 @@ main() {
     assert_nz "$_os" "os"
 
     local _url="$ASSET_URL/$_app/$_os/latest"
-    local _file="$_tmpdir/$_app.tar.bz2"
+    local _file="$tmpdir/$_app.tar.bz2"
 
-    if [ $_keep_dir = "no" ]; then
-        echo -n "Downloading $_app package..."
-    fi
+    echo -n "Downloading $_app package..."
     if [ ! -f "$_file" ]; then
         ensure curl -sSfL "$_url" -o "$_file"
-    fi
-    if [ $_keep_dir = "no" ]; then
         echo "ok"
-    fi
-
-    if [ $_keep_dir = "no" ]; then
-        echo -n "Installing..."
-    fi
-    cd "$_tmpdir"
-    ensure tar -C "$_tmpdir/$_app" -xf "$_file" --strip 1
-    do_install "$_app" "$_no_prompt"
-    local _retval=$?
-    if [ $_keep_dir = "no" ]; then
-        echo "done"
-    fi
-
-    if [ $_keep_dir = "no" ]; then
-        rm -rf "$_tmpdir"
     else
-        echo "$_tmpdir"
+        echo "cached"
     fi
 
-    return "$_retval"
+    echo -n "Installing..."
+    mkdir "$tmpdir/$_app"
+    ensure tar -C "$tmpdir/$_app" -xf "$_file" --strip 1
+    do_install "$_app" "$_no_prompt"
+    RETVAL=$?
+    echo "done"
+
+    if [ $_cleanup = "yes" ]; then
+        rm -rf "$tmpdir"
+    fi
+
+    return "$RETVAL"
 }
 
 do_install() {
     local _target=install
-    if [ $1 == "api" ] && [ $2 == "no" ]; then
+    if [ $1 = "api" ] && [ $2 = "no" ]; then
         echo "Which language components do you want to install?"
         echo "Note that C support is an auto-dependency for all other languages."
         select lang in "C" "PHP"; do
@@ -123,7 +116,12 @@ do_install() {
         done
     fi
 
-    sudo -E PATH=$PATH "$_app/installer.sh" $_target
+    local _pwd="$(pwd)"
+    cd "$tmpdir/$_app"
+    sudo -E PATH=$PATH "./installer.sh" $_target
+    RETVAL=$?
+    cd "$_pwd"
+    return "$RETVAL"
 }
 
 get_os() {
