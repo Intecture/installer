@@ -12,15 +12,20 @@ set -u
 
 ASSET_URL="https://static.intecture.io"
 
+sudo=
 tmpdir=
 
 main() {
     need_cmd curl
     need_cmd mktemp
+    need_cmd read
     need_cmd rm
-    need_cmd select
-    need_cmd sudo
     need_cmd tar
+
+    if [ "$(id -u)" != "0" ]; then
+        need_cmd sudo
+        sudo="sudo -E PATH=$PATH"
+    fi
 
     if [ $# -eq 0 ]; then
         echo "Usage: get.sh [-y] [-d <path>] (agent | api | auth | cli)"
@@ -97,20 +102,21 @@ do_install() {
     if [ $1 = "api" ] && [ $2 = "no" ]; then
         echo "Which language components do you want to install?"
         echo "Note that C support is an auto-dependency for all other languages."
-        select lang in "C" "PHP"; do
+        while true; do
+            read -p "[C, PHP]" lang
             case $lang in
-                C)
+                C | c)
                     _target="install-c"
                     break
                     ;;
 
-                PHP)
+                PHP | php)
                     _target="install-php"
                     break
                     ;;
 
-                *)
-                    echo "Please enter the option number..."
+                * )
+                    echo "Please enter a valid option..."
                     ;;
             esac
         done
@@ -118,7 +124,7 @@ do_install() {
 
     local _pwd="$(pwd)"
     cd "$tmpdir/$_app"
-    sudo -E PATH=$PATH "./installer.sh" $_target
+    $sudo ./installer.sh $_target
     RETVAL=$?
     cd "$_pwd"
     return "$RETVAL"
