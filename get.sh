@@ -28,10 +28,11 @@ main() {
     fi
 
     if [ $# -eq 0 ]; then
-        echo "Usage: get.sh [-y] [-d <path>] (agent | api | auth | cli)"
+        echo "Usage: get.sh [-u -y] [-d <path>] (agent | api | auth | cli)"
         exit 1
     fi
 
+    local _action=install
     local _app=
     local _cleanup=yes
     local _no_prompt=no
@@ -45,6 +46,10 @@ main() {
             -d)
                 tmpdir=yes
                 _cleanup=no
+                ;;
+
+            -u)
+                _action=uninstall
                 ;;
 
             -y)
@@ -83,10 +88,14 @@ main() {
         echo "cached"
     fi
 
-    echo -n "Installing..."
+    if [ "$_action" = "uninstall" ]; then
+        echo -n "Uninstalling..."
+    else
+        echo -n "Installing..."
+    fi
     mkdir "$tmpdir/$_app"
     ensure tar -C "$tmpdir/$_app" -xf "$_file" --strip 1
-    do_install "$_app" "$_no_prompt"
+    installer "$_action" "$_app" "$_no_prompt"
     RETVAL=$?
     echo "done"
 
@@ -97,9 +106,9 @@ main() {
     return "$RETVAL"
 }
 
-do_install() {
-    local _target=install
-    if [ $1 = "api" ] && [ $2 = "no" ]; then
+installer() {
+    local _target=$1
+    if [ "$_target" = "install" ] && [ $2 = "api" ] && [ $3 = "no" ]; then
         echo "Which language components do you want to install?"
         echo "Note that C support is an auto-dependency for all other languages."
         while true; do
