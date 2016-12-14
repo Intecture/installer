@@ -57,7 +57,7 @@ main() {
                 ;;
 
             *)
-                if [ $tmpdir = "yes" ]; then
+                if [ "$tmpdir" = "yes" ]; then
                     tmpdir="$arg"
                 else
                     err "Unknown argument $arg"
@@ -112,7 +112,7 @@ installer() {
         echo "Which language components do you want to install?"
         echo "Note that C support is an auto-dependency for all other languages."
         while true; do
-            read -p "[C, PHP]" lang
+            read -p "Please choose one of [C, PHP]: " lang < /dev/tty
             case $lang in
                 C | c)
                     _target="install-c"
@@ -145,8 +145,12 @@ get_os() {
         Linux)
             # When we can statically link successfully, we should be able
             # to produce vendor-agnostic packages.
-            if [ -f "/etc/redhat-release" ]; then
-                RETVAL="redhat"
+            if [ -f "/etc/centos-release" ]; then
+                RETVAL="centos"
+            elif [ -f "/etc/fedora-release" ]; then
+                RETVAL="fedora"
+            elif [ -f "/etc/lsb-release" ]; then
+                RETVAL="ubuntu"
             elif [ -f "/etc/debian_version" ]; then
                 RETVAL="debian"
             else
